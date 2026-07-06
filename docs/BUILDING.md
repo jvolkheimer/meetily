@@ -316,4 +316,29 @@ pnpm tauri:build
 
 By default, the application will be built with CPU-only processing. To enable GPU acceleration, see the [GPU Acceleration Guide](GPU_ACCELERATION.md).
 
+### GPU Acceleration (NVIDIA CUDA)
+
+`pnpm tauri:build` auto-detects an NVIDIA GPU (via `nvidia-smi` + `nvcc`) and, when found, automatically sets the required CUDA CMake flags, builds the `llama-helper` sidecar, and compiles with `--features cuda`. This needs two prerequisites beyond the CPU build:
+
+- **CUDA Toolkit** (12.4+ or 13.x): install the [CUDA Toolkit](https://developer.nvidia.com/cuda-downloads) so that `nvcc` is on `PATH` and `CUDA_PATH` is set. The GPU driver alone is not enough — the toolkit (compiler + Visual Studio integration) is required.
+- **libclang 18.x or older** — see the note below.
+
+> **⚠️ libclang version matters.** `whisper-rs-sys` uses `bindgen 0.69.5`, which mis-parses `whisper.h` with **libclang 19 or newer** (it emits an opaque `whisper_full_params`, after which `whisper-rs` fails to compile with dozens of `error[E0609]: no field ... on type whisper_full_params`). Install **libclang 18.x or older** and point `LIBCLANG_PATH` at it. The simplest no-admin way is the prebuilt Python wheel:
+>
+> ```powershell
+> pip install "libclang==18.1.1" --target C:\tools\libclang18
+> $env:LIBCLANG_PATH = "C:\tools\libclang18\clang\native"
+> ```
+>
+> Alternatively, install a full [LLVM 18 release](https://github.com/llvm/llvm-project/releases) and set `LIBCLANG_PATH` to its `bin` directory.
+
+The build targets CUDA compute capability `7.5` by default (a safe baseline that JIT-forwards to newer GPUs). To compile natively for your card, override the architecture first — e.g. for an RTX 40-series GPU (compute capability 8.9):
+
+```powershell
+$env:CMAKE_CUDA_ARCHITECTURES = "89"
+pnpm tauri:build
+```
+
+> **Note:** CUDA 13 dropped support for older GPUs (compute capability below 7.5), so `CMAKE_CUDA_ARCHITECTURES` must name a supported architecture. Find yours with `nvidia-smi --query-gpu=compute_cap --format=csv` (e.g. `8.9` → `89`).
+
 </details>
