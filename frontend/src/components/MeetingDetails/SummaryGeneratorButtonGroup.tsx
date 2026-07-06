@@ -33,9 +33,9 @@ interface SummaryGeneratorButtonGroupProps {
   onStopGeneration: () => void;
   customPrompt: string;
   summaryStatus: 'idle' | 'processing' | 'summarizing' | 'regenerating' | 'completed' | 'error';
-  availableTemplates: Array<{ id: string, name: string, description: string }>;
-  selectedTemplate: string;
-  onTemplateSelect: (templateId: string, templateName: string) => void;
+  summaryPrompts: Array<{ id: string; name: string }>;
+  selectedPromptId: string;
+  onPromptSelect: (promptId: string, promptName: string) => void;
   hasTranscripts?: boolean;
   hasSummary?: boolean;
   isModelConfigLoading?: boolean;
@@ -50,9 +50,9 @@ export function SummaryGeneratorButtonGroup({
   onStopGeneration,
   customPrompt,
   summaryStatus,
-  availableTemplates,
-  selectedTemplate,
-  onTemplateSelect,
+  summaryPrompts,
+  selectedPromptId,
+  onPromptSelect,
   hasTranscripts = true,
   hasSummary = false,
   isModelConfigLoading = false,
@@ -324,29 +324,28 @@ export function SummaryGeneratorButtonGroup({
         </DialogContent>
       </Dialog>
 
-      {/* Template selector dropdown */}
-      {availableTemplates.length > 0 && (
+      {/* Summary prompt selector dropdown */}
+      {summaryPrompts.length > 0 && (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
               variant="outline"
               size="sm"
-              title="Select summary template"
+              title="Select summary prompt"
             >
               <FileText />
-              <span className="hidden lg:inline">Template</span>
+              <span className="hidden lg:inline">Prompt</span>
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            {availableTemplates.map((template) => (
+            {summaryPrompts.map((prompt) => (
               <DropdownMenuItem
-                key={template.id}
-                onClick={() => onTemplateSelect(template.id, template.name)}
-                title={template.description}
+                key={prompt.id}
+                onClick={() => onPromptSelect(prompt.id, prompt.name)}
                 className="flex items-center justify-between gap-2"
               >
-                <span>{template.name}</span>
-                {selectedTemplate === template.id && (
+                <span>{prompt.name}</span>
+                {selectedPromptId === prompt.id && (
                   <Check className="h-4 w-4 text-green-600" />
                 )}
               </DropdownMenuItem>

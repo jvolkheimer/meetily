@@ -334,6 +334,7 @@ pub async fn api_process_transcript<R: Runtime>(
     _overlap: Option<i32>,
     custom_prompt: Option<String>,
     template_id: Option<String>,
+    summary_prompt_id: Option<String>,
     summary_language: Option<String>,
     _auth_token: Option<String>,
 ) -> Result<ProcessTranscriptResponse, String> {
@@ -349,6 +350,12 @@ pub async fn api_process_transcript<R: Runtime>(
     let pool = state.db_manager.pool().clone();
     let final_prompt = custom_prompt.unwrap_or_else(|| "".to_string());
     let final_template_id = template_id.unwrap_or_else(|| "daily_standup".to_string());
+
+    // Normalise empty / whitespace-only prompt id to None
+    let summary_prompt_id = summary_prompt_id.and_then(|s| {
+        let t = s.trim();
+        if t.is_empty() { None } else { Some(t.to_string()) }
+    });
 
     // Normalise empty / whitespace-only to None so "" and null behave identically
     let summary_language = summary_language.and_then(|s| {
@@ -393,6 +400,7 @@ pub async fn api_process_transcript<R: Runtime>(
             model_name,
             final_prompt,
             final_template_id,
+            summary_prompt_id,
             summary_language,
         )
         .await;

@@ -55,9 +55,9 @@ interface SummaryPanelProps {
   summaryError: string | null;
   onRegenerateSummary: () => Promise<void>;
   getSummaryStatusMessage: (status: 'idle' | 'processing' | 'summarizing' | 'regenerating' | 'completed' | 'error') => string;
-  availableTemplates: Array<{ id: string, name: string, description: string }>;
-  selectedTemplate: string;
-  onTemplateSelect: (templateId: string, templateName: string) => void;
+  summaryPrompts: Array<{ id: string; name: string }>;
+  selectedPromptId: string;
+  onPromptSelect: (promptId: string, promptName: string) => void;
   isModelConfigLoading?: boolean;
   onOpenModelSettings?: (openFn: () => void) => void;
 }
@@ -91,9 +91,9 @@ export function SummaryPanel({
   summaryError,
   onRegenerateSummary,
   getSummaryStatusMessage,
-  availableTemplates,
-  selectedTemplate,
-  onTemplateSelect,
+  summaryPrompts,
+  selectedPromptId,
+  onPromptSelect,
   isModelConfigLoading = false,
   onOpenModelSettings
 }: SummaryPanelProps) {
@@ -277,9 +277,9 @@ export function SummaryPanel({
                 onStopGeneration={onStopGeneration}
                 customPrompt={customPrompt}
                 summaryStatus={summaryStatus}
-                availableTemplates={availableTemplates}
-                selectedTemplate={selectedTemplate}
-                onTemplateSelect={onTemplateSelect}
+                summaryPrompts={summaryPrompts}
+                selectedPromptId={selectedPromptId}
+                onPromptSelect={onPromptSelect}
                 hasTranscripts={transcripts.length > 0}
                 hasSummary={!!aiSummary}
                 isModelConfigLoading={isModelConfigLoading}
@@ -319,9 +319,9 @@ export function SummaryPanel({
               onStopGeneration={onStopGeneration}
               customPrompt={customPrompt}
               summaryStatus={summaryStatus}
-              availableTemplates={availableTemplates}
-              selectedTemplate={selectedTemplate}
-              onTemplateSelect={onTemplateSelect}
+              summaryPrompts={summaryPrompts}
+              selectedPromptId={selectedPromptId}
+              onPromptSelect={onPromptSelect}
               hasTranscripts={transcripts.length > 0}
               isModelConfigLoading={isModelConfigLoading}
               onOpenModelSettings={onOpenModelSettings}
@@ -347,9 +347,9 @@ export function SummaryPanel({
               onStopGeneration={onStopGeneration}
               customPrompt={customPrompt}
               summaryStatus={summaryStatus}
-              availableTemplates={availableTemplates}
-              selectedTemplate={selectedTemplate}
-              onTemplateSelect={onTemplateSelect}
+              summaryPrompts={summaryPrompts}
+              selectedPromptId={selectedPromptId}
+              onPromptSelect={onPromptSelect}
               hasTranscripts={transcripts.length > 0}
               hasSummary={false}
               isModelConfigLoading={isModelConfigLoading}

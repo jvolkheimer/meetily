@@ -300,6 +300,7 @@ impl SummaryService {
         model_name: String,
         custom_prompt: String,
         template_id: String,
+        summary_prompt_id: Option<String>,
         summary_language: Option<String>,
     ) {
         let start_time = Instant::now();
@@ -460,7 +461,23 @@ impl SummaryService {
                 return;
             }
         };
-        let template_fingerprint = template_cache_fingerprint(&template);
+        // Resolve the selected user-defined summary prompt (if any). When present, it replaces
+        // the template-derived final-report system prompt during generation.
+        let summary_prompt_text = summary_prompt_id
+            .as_ref()
+            .and_then(|id| crate::summary::summary_prompts::get_prompt_text(id));
+
+        // Fold the prompt identity into the template fingerprint so switching or editing the
+        // selected prompt invalidates the cached English summary (reuses the existing cache field).
+        let template_fingerprint = {
+            let base = template_cache_fingerprint(&template);
+            match (&summary_prompt_id, &summary_prompt_text) {
+                (Some(id), Some(prompt)) => {
+                    stable_text_fingerprint(&format!("{base}\u{1f}{id}\u{1f}{prompt}"))
+                }
+                _ => base,
+            }
+        };
 
         let cache_source = build_summary_cache_source(
             &text,
@@ -514,6 +531,7 @@ impl SummaryService {
             &custom_prompt,
             &template_id,
             &template,
+            summary_prompt_text.as_deref(),
             token_threshold,
             ollama_endpoint.as_deref(),
             custom_openai_endpoint.as_deref(),

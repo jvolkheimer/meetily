@@ -671,6 +671,11 @@ pub fn run() {
             summary::template_commands::api_list_templates,
             summary::template_commands::api_get_template_details,
             summary::template_commands::api_validate_template,
+            // Summary prompt commands
+            summary::summary_prompt_commands::api_list_summary_prompts,
+            summary::summary_prompt_commands::api_save_summary_prompt,
+            summary::summary_prompt_commands::api_delete_summary_prompt,
+            summary::summary_prompt_commands::api_set_default_summary_prompt,
             // Built-in AI commands
             summary::summary_engine::commands::builtin_ai_list_models,
             summary::summary_engine::commands::builtin_ai_get_model_info,

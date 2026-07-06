@@ -304,6 +304,7 @@ pub fn extract_meeting_name_from_markdown(markdown: &str) -> Option<String> {
 /// * `text` - Full transcript text to summarize
 /// * `custom_prompt` - Optional user-provided context
 /// * `template_id` - Template identifier (e.g., "daily_standup", "standard_meeting")
+/// * `summary_prompt` - Optional user-defined system prompt used verbatim instead of the template
 /// * `token_threshold` - Token limit for single-pass processing (default 4000)
 /// * `ollama_endpoint` - Optional custom Ollama endpoint
 /// * `custom_openai_endpoint` - Optional custom OpenAI-compatible endpoint
@@ -329,6 +330,7 @@ pub async fn generate_meeting_summary(
     custom_prompt: &str,
     template_id: &str,
     template: &Template,
+    summary_prompt: Option<&str>,
     token_threshold: usize,
     ollama_endpoint: Option<&str>,
     custom_openai_endpoint: Option<&str>,
@@ -475,12 +477,20 @@ pub async fn generate_meeting_summary(
 
         info!("Generating final markdown report with template: {}", template_id);
 
-        // Generate markdown structure and section instructions using template methods
-        let clean_template_markdown = template.to_markdown_structure();
-        let section_instructions = template.to_section_instructions();
-
-        let final_system_prompt =
-            build_final_report_system_prompt(&section_instructions, &clean_template_markdown);
+        // Use a user-defined summary prompt verbatim when one is selected; otherwise fall back
+        // to the structured template's generated system prompt.
+        let final_system_prompt = match summary_prompt {
+            Some(prompt) if !prompt.trim().is_empty() => {
+                info!("Using user-defined summary prompt for final report");
+                prompt.to_string()
+            }
+            _ => {
+                // Generate markdown structure and section instructions using template methods
+                let clean_template_markdown = template.to_markdown_structure();
+                let section_instructions = template.to_section_instructions();
+                build_final_report_system_prompt(&section_instructions, &clean_template_markdown)
+            }
+        };
 
         let mut final_user_prompt = format!(
             "<transcript_chunks>\n{content_to_summarize}\n</transcript_chunks>\n"

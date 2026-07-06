@@ -13,7 +13,7 @@ import { ModelConfig } from '@/components/ModelSettingsModal';
 // Custom hooks
 import { useMeetingData } from '@/hooks/meeting-details/useMeetingData';
 import { useSummaryGeneration } from '@/hooks/meeting-details/useSummaryGeneration';
-import { useTemplates } from '@/hooks/meeting-details/useTemplates';
+import { useSummaryPrompts } from '@/hooks/meeting-details/useSummaryPrompts';
 import { useCopyOperations } from '@/hooks/meeting-details/useCopyOperations';
 import { useMeetingOperations } from '@/hooks/meeting-details/useMeetingOperations';
 import { useConfig } from '@/contexts/ConfigContext';
@@ -69,7 +69,7 @@ export default function PageContent({
 
   // Custom hooks
   const meetingData = useMeetingData({ meeting, summaryData, onMeetingUpdated });
-  const templates = useTemplates();
+  const summaryPrompts = useSummaryPrompts();
 
   // Callback to register the modal open function
   const handleRegisterModalOpen = (openFn: () => void) => {
@@ -115,7 +115,7 @@ export default function PageContent({
     transcripts: meetingData.transcripts,
     modelConfig: modelConfig,
     isModelConfigLoading: false, // ConfigContext loads on mount
-    selectedTemplate: templates.selectedTemplate,
+    selectedPromptId: summaryPrompts.selectedPromptId,
     onMeetingUpdated,
     updateMeetingTitle: meetingData.updateMeetingTitle,
     setAiSummary: meetingData.setAiSummary,
@@ -221,9 +221,9 @@ export default function PageContent({
           summaryError={summaryGeneration.summaryError}
           onRegenerateSummary={summaryGeneration.handleRegenerateSummary}
           getSummaryStatusMessage={summaryGeneration.getSummaryStatusMessage}
-          availableTemplates={templates.availableTemplates}
-          selectedTemplate={templates.selectedTemplate}
-          onTemplateSelect={templates.handleTemplateSelection}
+          summaryPrompts={summaryPrompts.prompts}
+          selectedPromptId={summaryPrompts.selectedPromptId}
+          onPromptSelect={summaryPrompts.handlePromptSelect}
           isModelConfigLoading={false}
           onOpenModelSettings={handleRegisterModalOpen}
         />

@@ -55,7 +55,7 @@ interface UseSummaryGenerationProps {
   transcripts: Transcript[];
   modelConfig: ModelConfig;
   isModelConfigLoading: boolean;
-  selectedTemplate: string;
+  selectedPromptId: string;
   onMeetingUpdated?: () => Promise<void>;
   updateMeetingTitle: (title: string) => void;
   setAiSummary: (summary: Summary | null) => void;
@@ -67,7 +67,7 @@ export function useSummaryGeneration({
   transcripts,
   modelConfig,
   isModelConfigLoading,
-  selectedTemplate,
+  selectedPromptId,
   onMeetingUpdated,
   updateMeetingTitle,
   setAiSummary,
@@ -116,7 +116,7 @@ export function useSummaryGeneration({
         throw new Error('No transcript text available. Please add some text first.');
       }
 
-      console.log('Processing transcript with template:', selectedTemplate);
+      console.log('Processing transcript with summary prompt:', selectedPromptId);
 
       // Calculate time since recording
       const timeSinceRecording = (Date.now() - new Date(meeting.created_at).getTime()) / 60000; // minutes
@@ -155,7 +155,10 @@ export function useSummaryGeneration({
         chunkSize: 40000,
         overlap: 1000,
         customPrompt: customPrompt,
-        templateId: selectedTemplate,
+        // Templates are superseded by user-defined summary prompts; a valid template id is still
+        // sent as a harmless structural fallback for when no prompt is available.
+        templateId: 'standard_meeting',
+        summaryPromptId: selectedPromptId,
         summaryLanguage,
       }) as any;
 
@@ -391,7 +394,7 @@ export function useSummaryGeneration({
     meeting.id,
     meeting.created_at,
     modelConfig,
-    selectedTemplate,
+    selectedPromptId,
     startSummaryPolling,
     setAiSummary,
     updateMeetingTitle,
@@ -477,7 +480,7 @@ export function useSummaryGeneration({
     console.log('🚀 Starting summary generation with config:', {
       provider: modelConfig.provider,
       model: modelConfig.model,
-      template: selectedTemplate
+      summaryPromptId: selectedPromptId
     });
 
     // Check if Ollama provider has models available
@@ -614,7 +617,7 @@ export function useSummaryGeneration({
       ...summaryPayload,
       customPrompt,
     });
-  }, [meeting.id, fetchAllTranscripts, buildSummaryTranscriptPayload, processSummary, modelConfig, isModelConfigLoading, selectedTemplate]);
+  }, [meeting.id, fetchAllTranscripts, buildSummaryTranscriptPayload, processSummary, modelConfig, isModelConfigLoading, selectedPromptId]);
 
   // Public API: Regenerate summary from the current saved transcript
   const handleRegenerateSummary = useCallback(async () => {
