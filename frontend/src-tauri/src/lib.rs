@@ -41,6 +41,7 @@ pub mod audio;
 pub mod config;
 pub mod console_utils;
 pub mod database;
+pub mod meeting_detection;
 pub mod notifications;
 pub mod ollama;
 pub mod onboarding;
@@ -671,6 +672,8 @@ pub fn run() {
             summary::template_commands::api_list_templates,
             summary::template_commands::api_get_template_details,
             summary::template_commands::api_validate_template,
+            // Auto Record meeting detection
+            meeting_detection::is_meeting_microphone_active,
             // Summary prompt commands
             summary::summary_prompt_commands::api_list_summary_prompts,
             summary::summary_prompt_commands::api_save_summary_prompt,

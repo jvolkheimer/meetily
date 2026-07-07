@@ -5,6 +5,13 @@ import { invoke } from '@tauri-apps/api/core';
 import { DeviceSelection, SelectedDevices } from '@/components/DeviceSelection';
 import Analytics from '@/lib/analytics';
 import { toast } from 'sonner';
+import {
+  AUTO_RECORD_TIMEOUT_PREF,
+  DEFAULT_AUTO_RECORD_TIMEOUT_SECONDS,
+  MIN_AUTO_RECORD_TIMEOUT_SECONDS,
+  MAX_AUTO_RECORD_TIMEOUT_SECONDS,
+  clampAutoRecordTimeout,
+} from '@/lib/autoRecord';
 
 export interface RecordingPreferences {
   save_folder: string;
@@ -29,6 +36,8 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showRecordingNotification, setShowRecordingNotification] = useState(true);
+  const [autoRecord, setAutoRecord] = useState(false);
+  const [autoRecordTimeout, setAutoRecordTimeout] = useState(DEFAULT_AUTO_RECORD_TIMEOUT_SECONDS);
 
   // Load recording preferences on component mount
   useEffect(() => {
@@ -66,6 +75,23 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
       }
     };
     loadNotificationPref();
+  }, []);
+
+  // Load Auto Record preference
+  useEffect(() => {
+    const loadAutoRecordPref = async () => {
+      try {
+        const { Store } = await import('@tauri-apps/plugin-store');
+        const store = await Store.load('preferences.json');
+        const enabled = await store.get<boolean>('auto_record') ?? false;
+        setAutoRecord(enabled);
+        const timeout = await store.get<number>(AUTO_RECORD_TIMEOUT_PREF);
+        setAutoRecordTimeout(clampAutoRecordTimeout(timeout ?? DEFAULT_AUTO_RECORD_TIMEOUT_SECONDS));
+      } catch (error) {
+        console.error('Failed to load auto record preference:', error);
+      }
+    };
+    loadAutoRecordPref();
   }, []);
 
   const handleAutoSaveToggle = async (enabled: boolean) => {
@@ -118,6 +144,36 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
     } catch (error) {
       console.error('Failed to save notification preference:', error);
       toast.error('Failed to save preference');
+    }
+  };
+
+  const handleAutoRecordToggle = async (enabled: boolean) => {
+    try {
+      setAutoRecord(enabled);
+      const { Store } = await import('@tauri-apps/plugin-store');
+      const store = await Store.load('preferences.json');
+      await store.set('auto_record', enabled);
+      await store.save();
+      toast.success(enabled ? 'Auto Record enabled' : 'Auto Record disabled');
+      await Analytics.track('auto_record_toggled', { enabled: enabled.toString() });
+    } catch (error) {
+      console.error('Failed to save auto record preference:', error);
+      setAutoRecord(!enabled); // revert on failure
+      toast.error('Failed to save Auto Record preference');
+    }
+  };
+
+  const handleAutoRecordTimeoutSave = async (rawValue: number) => {
+    const seconds = clampAutoRecordTimeout(rawValue);
+    setAutoRecordTimeout(seconds);
+    try {
+      const { Store } = await import('@tauri-apps/plugin-store');
+      const store = await Store.load('preferences.json');
+      await store.set(AUTO_RECORD_TIMEOUT_PREF, seconds);
+      await store.save();
+    } catch (error) {
+      console.error('Failed to save auto record timeout:', error);
+      toast.error('Failed to save timeout');
     }
   };
 
@@ -225,6 +281,50 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
           checked={showRecordingNotification}
           onCheckedChange={handleNotificationToggle}
         />
+      </div>
+
+      {/* Auto Record Toggle */}
+      <div className="p-4 border rounded-lg space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex-1">
+            <div className="font-medium">Auto Record</div>
+            <div className="text-sm text-gray-600">
+              Detect when you join a meeting (Teams, Zoom, Meet, etc.) and start recording
+              automatically. When the meeting appears to end, you&apos;ll be asked whether to stop.
+            </div>
+            <div className="text-xs text-gray-500 mt-1">
+              Detects any app using your microphone. Windows only for now.
+            </div>
+          </div>
+          <Switch
+            checked={autoRecord}
+            onCheckedChange={handleAutoRecordToggle}
+          />
+        </div>
+
+        {autoRecord && (
+          <div className="flex items-center justify-between gap-4 border-t pt-4">
+            <div className="flex-1">
+              <div className="text-sm font-medium text-gray-800">Meeting end timeout</div>
+              <div className="text-xs text-gray-500">
+                How long the meeting mic must be quiet before you&apos;re prompted to stop
+                ({MIN_AUTO_RECORD_TIMEOUT_SECONDS}–{MAX_AUTO_RECORD_TIMEOUT_SECONDS}s).
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <input
+                type="number"
+                min={MIN_AUTO_RECORD_TIMEOUT_SECONDS}
+                max={MAX_AUTO_RECORD_TIMEOUT_SECONDS}
+                value={autoRecordTimeout}
+                onChange={(e) => setAutoRecordTimeout(Number(e.target.value))}
+                onBlur={(e) => handleAutoRecordTimeoutSave(Number(e.target.value))}
+                className="w-20 px-2 py-1 text-sm text-right border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+              />
+              <span className="text-sm text-gray-600">seconds</span>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Device Preferences */}
