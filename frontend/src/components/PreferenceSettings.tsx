@@ -22,6 +22,45 @@ export function PreferenceSettings() {
   const [previousNotificationsEnabled, setPreviousNotificationsEnabled] = useState<boolean | null>(null);
   const hasTrackedViewRef = useRef(false);
 
+  // Summary export folder (auto-export completed summaries as markdown)
+  const [exportDir, setExportDir] = useState<string | null>(null);
+  const [isSavingExportDir, setIsSavingExportDir] = useState(false);
+
+  // Load the configured summary export directory on mount
+  useEffect(() => {
+    invoke<string | null>('get_summary_export_dir')
+      .then(setExportDir)
+      .catch((err) => console.error('Failed to load summary export directory:', err));
+  }, []);
+
+  const handleChooseExportDir = async () => {
+    try {
+      const picked = await invoke<string | null>('pick_directory');
+      if (!picked) return; // User cancelled the picker
+      setIsSavingExportDir(true);
+      await invoke('set_summary_export_dir', { dir: picked });
+      setExportDir(picked);
+      await Analytics.track('summary_export_dir_set', { has_dir: 'true' });
+    } catch (err) {
+      console.error('Failed to set summary export directory:', err);
+    } finally {
+      setIsSavingExportDir(false);
+    }
+  };
+
+  const handleClearExportDir = async () => {
+    try {
+      setIsSavingExportDir(true);
+      await invoke('set_summary_export_dir', { dir: null });
+      setExportDir(null);
+      await Analytics.track('summary_export_dir_set', { has_dir: 'false' });
+    } catch (err) {
+      console.error('Failed to clear summary export directory:', err);
+    } finally {
+      setIsSavingExportDir(false);
+    }
+  };
+
   // Lazy load preferences on mount (only loads if not already cached)
   useEffect(() => {
     loadPreferences();
@@ -217,6 +256,40 @@ export function PreferenceSettings() {
           <p className="text-xs text-blue-800">
             <strong>Note:</strong> Database and models are stored together in your application data directory for unified management.
           </p>
+        </div>
+      </div>
+
+      {/* Summary Export Folder Section */}
+      <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
+        <h3 className="text-lg font-semibold text-gray-900 mb-2">Summary Export Folder</h3>
+        <p className="text-sm text-gray-600 mb-4">
+          When set, each completed meeting summary is automatically saved here as a Markdown file
+          named after the meeting (date + name). Regenerating a summary overwrites its file.
+        </p>
+
+        <div className="p-4 border rounded-lg bg-gray-50">
+          <div className="text-sm text-gray-600 mb-3 break-all font-mono text-xs">
+            {exportDir || 'Not set — automatic export is disabled'}
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={handleChooseExportDir}
+              disabled={isSavingExportDir}
+              className="flex items-center gap-2 px-3 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-100 transition-colors disabled:opacity-50"
+            >
+              <FolderOpen className="w-4 h-4" />
+              Choose Folder
+            </button>
+            {exportDir && (
+              <button
+                onClick={handleClearExportDir}
+                disabled={isSavingExportDir}
+                className="px-3 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-100 transition-colors disabled:opacity-50"
+              >
+                Clear
+              </button>
+            )}
+          </div>
         </div>
       </div>
 

@@ -266,6 +266,40 @@ impl SettingsRepository {
         Ok(())
     }
 
+    /// Gets the directory where completed summaries are auto-exported as markdown.
+    /// Returns `None` when unset (feature disabled).
+    pub async fn get_summary_export_dir(
+        pool: &SqlitePool,
+    ) -> std::result::Result<Option<String>, sqlx::Error> {
+        let dir: Option<Option<String>> =
+            sqlx::query_scalar("SELECT summaryExportDir FROM settings WHERE id = '1' LIMIT 1")
+                .fetch_optional(pool)
+                .await?;
+        Ok(dir.flatten())
+    }
+
+    /// Sets (or clears, when `dir` is `None`) the summary export directory.
+    pub async fn set_summary_export_dir(
+        pool: &SqlitePool,
+        dir: Option<&str>,
+    ) -> std::result::Result<(), sqlx::Error> {
+        // Mirror save_api_key: provide NOT NULL defaults for the insert branch, which only
+        // runs on the unlikely path where no settings row exists yet.
+        sqlx::query(
+            r#"
+            INSERT INTO settings (id, provider, model, whisperModel, summaryExportDir)
+            VALUES ('1', 'ollama', 'llama3.2:latest', 'large-v3', $1)
+            ON CONFLICT(id) DO UPDATE SET
+                summaryExportDir = excluded.summaryExportDir
+            "#,
+        )
+        .bind(dir)
+        .execute(pool)
+        .await?;
+
+        Ok(())
+    }
+
     // ===== CUSTOM OPENAI CONFIG METHODS =====
 
     /// Gets the custom OpenAI configuration from JSON

@@ -1164,6 +1164,55 @@ pub async fn open_external_url(url: String) -> Result<(), String> {
     }
 }
 
+// ===== SUMMARY EXPORT DIRECTORY COMMANDS =====
+
+/// Returns the directory where completed summaries are auto-exported as markdown,
+/// or `None` when the feature is disabled (no directory set).
+#[tauri::command]
+pub async fn get_summary_export_dir<R: Runtime>(
+    _app: AppHandle<R>,
+    state: tauri::State<'_, AppState>,
+) -> Result<Option<String>, String> {
+    let pool = state.db_manager.pool();
+    SettingsRepository::get_summary_export_dir(pool)
+        .await
+        .map_err(|e| format!("Failed to get summary export directory: {}", e))
+}
+
+/// Sets the summary export directory. Pass `None`/null to disable auto-export.
+#[tauri::command]
+pub async fn set_summary_export_dir<R: Runtime>(
+    _app: AppHandle<R>,
+    state: tauri::State<'_, AppState>,
+    dir: Option<String>,
+) -> Result<(), String> {
+    let pool = state.db_manager.pool();
+    log_info!("set_summary_export_dir called with: {:?}", dir);
+    SettingsRepository::set_summary_export_dir(pool, dir.as_deref())
+        .await
+        .map_err(|e| format!("Failed to set summary export directory: {}", e))
+}
+
+/// Opens a native folder picker and returns the chosen directory, or `None` if cancelled.
+#[tauri::command]
+pub async fn pick_directory<R: Runtime>(app: AppHandle<R>) -> Result<Option<String>, String> {
+    use tauri_plugin_dialog::DialogExt;
+
+    let folder = app.dialog().file().blocking_pick_folder();
+
+    match folder {
+        Some(path) => {
+            let path_str = path.to_string();
+            log_info!("User selected directory: {}", path_str);
+            Ok(Some(path_str))
+        }
+        None => {
+            log_info!("User cancelled directory selection");
+            Ok(None)
+        }
+    }
+}
+
 // ===== CUSTOM OPENAI API COMMANDS =====
 
 /// Saves the custom OpenAI configuration

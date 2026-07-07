@@ -53,6 +53,44 @@ fn strip_title_if_present(markdown: &str) -> String {
     }
 }
 
+/// Strips a leading `YYYY-MM-DD ` date prefix if present, so re-prefixing a name that was
+/// already dated (e.g. on regeneration) does not stack multiple dates.
+fn strip_leading_date_prefix(name: &str) -> &str {
+    let bytes = name.as_bytes();
+    let is_dated = name.len() >= 11
+        && bytes[0..4].iter().all(u8::is_ascii_digit)
+        && bytes[4] == b'-'
+        && bytes[5..7].iter().all(u8::is_ascii_digit)
+        && bytes[7] == b'-'
+        && bytes[8..10].iter().all(u8::is_ascii_digit)
+        && bytes[10] == b' ';
+    if is_dated {
+        name[11..].trim_start()
+    } else {
+        name
+    }
+}
+
+/// Sanitizes a meeting name into a filesystem-safe filename stem (no extension).
+/// Replaces characters that are invalid on Windows/macOS/Linux and trims trailing
+/// dots/spaces (which Windows disallows).
+fn sanitize_export_filename(name: &str) -> String {
+    let replaced: String = name
+        .chars()
+        .map(|c| match c {
+            '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*' => '_',
+            c if (c as u32) < 0x20 => '_',
+            c => c,
+        })
+        .collect();
+    let trimmed = replaced.trim_matches(|c| c == ' ' || c == '.');
+    if trimmed.is_empty() {
+        "summary".to_string()
+    } else {
+        trimmed.to_string()
+    }
+}
+
 const ENGLISH_CACHE_FIELD: &str = "english_cache";
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -559,18 +597,51 @@ impl SummaryService {
                 );
                 info!("Final markdown generated ({} chars)", final_markdown.len());
 
-                if let Some(name) = extract_meeting_name_from_markdown(&final_markdown)
-                    .filter(|n| !n.is_empty())
-                {
-                    info!("Extracted meeting name from summary: '{}'", name);
+                // Resolve the meeting metadata so the name/file can be prefixed with the
+                // meeting's (local) date as "YYYY-MM-DD".
+                let meeting_meta = MeetingsRepository::get_meeting_metadata(&pool, &meeting_id)
+                    .await
+                    .ok()
+                    .flatten();
+                let date_prefix = meeting_meta.as_ref().map(|m| {
+                    m.created_at
+                        .0
+                        .with_timezone(&chrono::Local)
+                        .format("%Y-%m-%d")
+                        .to_string()
+                });
+
+                // Prefer the freshly extracted AI name; fall back to the existing title so the
+                // export still lands on a stable filename when no name could be extracted.
+                let extracted = extract_meeting_name_from_markdown(&final_markdown)
+                    .filter(|n| !n.is_empty());
+                let base_name = extracted
+                    .clone()
+                    .or_else(|| meeting_meta.as_ref().map(|m| m.title.clone()))
+                    .unwrap_or_else(|| meeting_id.clone());
+
+                // Build "YYYY-MM-DD <name>", idempotent against an already-dated base name.
+                let dated_name = match &date_prefix {
+                    Some(date) => format!("{} {}", date, strip_leading_date_prefix(&base_name)),
+                    None => base_name.clone(),
+                };
+
+                // Only persist the name when the AI produced a fresh one; don't clobber a
+                // user's manual title on a re-run that failed to extract a name.
+                if extracted.is_some() {
+                    info!("Setting dated meeting name: '{}'", dated_name);
                     if let Err(e) =
-                        MeetingsRepository::update_meeting_name(&pool, &meeting_id, &name).await
+                        MeetingsRepository::update_meeting_name(&pool, &meeting_id, &dated_name).await
                     {
                         error!("Failed to update meeting name for {}: {}", meeting_id, e);
                     } else {
                         info!("Successfully updated meeting name for {}", meeting_id);
                     }
                 }
+
+                // Auto-export the summary markdown to the user-configured directory (if any),
+                // overwriting any existing file so regeneration refreshes it.
+                Self::export_summary_markdown(&pool, &dated_name, &final_markdown).await;
 
                 let result_json = build_summary_result_json(
                     &final_markdown,
@@ -634,11 +705,87 @@ impl SummaryService {
             );
         }
     }
+
+    /// Writes the completed summary markdown to the user-configured export directory as
+    /// `<dated_name>.md`, overwriting any existing file. No-op when no directory is set.
+    /// Failures are logged but never surfaced — export is best-effort and must not fail the run.
+    async fn export_summary_markdown(pool: &SqlitePool, dated_name: &str, markdown: &str) {
+        let export_dir = match SettingsRepository::get_summary_export_dir(pool).await {
+            Ok(Some(dir)) if !dir.trim().is_empty() => dir,
+            Ok(_) => return, // Not configured — feature disabled.
+            Err(e) => {
+                error!("Failed to read summary export directory: {}", e);
+                return;
+            }
+        };
+
+        if let Err(e) = std::fs::create_dir_all(&export_dir) {
+            error!(
+                "Failed to create summary export directory {}: {}",
+                export_dir, e
+            );
+            return;
+        }
+
+        let file_name = format!("{}.md", sanitize_export_filename(dated_name));
+        let path = Path::new(&export_dir).join(&file_name);
+
+        match std::fs::write(&path, markdown) {
+            Ok(()) => info!("Exported summary markdown to {:?}", path),
+            Err(e) => error!("Failed to export summary markdown to {:?}: {}", path, e),
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_strip_leading_date_prefix_removes_existing_date() {
+        assert_eq!(
+            strip_leading_date_prefix("2026-07-07 Weekly Sync"),
+            "Weekly Sync"
+        );
+    }
+
+    #[test]
+    fn test_strip_leading_date_prefix_leaves_undated_name() {
+        assert_eq!(strip_leading_date_prefix("Weekly Sync"), "Weekly Sync");
+        // A date-like token without the trailing space is not a prefix.
+        assert_eq!(
+            strip_leading_date_prefix("2026-07-07Weekly"),
+            "2026-07-07Weekly"
+        );
+        // Non-digits in the date slot are not treated as a prefix.
+        assert_eq!(
+            strip_leading_date_prefix("20XX-07-07 Name"),
+            "20XX-07-07 Name"
+        );
+    }
+
+    #[test]
+    fn test_strip_leading_date_prefix_is_idempotent() {
+        let once = strip_leading_date_prefix("2026-07-07 Board Meeting");
+        // Re-dating then stripping again yields the same base name (no stacked dates).
+        let redated = format!("2026-07-07 {}", once);
+        assert_eq!(strip_leading_date_prefix(&redated), "Board Meeting");
+    }
+
+    #[test]
+    fn test_sanitize_export_filename_replaces_invalid_chars() {
+        assert_eq!(
+            sanitize_export_filename("2026-07-07 Q3: Plans / Risks?"),
+            "2026-07-07 Q3_ Plans _ Risks_"
+        );
+    }
+
+    #[test]
+    fn test_sanitize_export_filename_trims_and_falls_back() {
+        assert_eq!(sanitize_export_filename("  Name.  "), "Name");
+        // Trims to empty (only spaces/dots) -> safe fallback stem.
+        assert_eq!(sanitize_export_filename(" . . "), "summary");
+    }
 
     #[test]
     fn test_strip_leading_title_with_body() {
