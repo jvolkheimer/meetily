@@ -7,6 +7,12 @@ import { useRecordingState, RecordingStatus } from '@/contexts/RecordingStateCon
 import { recordingService } from '@/services/recordingService';
 import Analytics from '@/lib/analytics';
 import { showRecordingNotification } from '@/lib/recordingNotification';
+import {
+  lookupCalendarEvents,
+  calendarTitle,
+  stashPendingCalendarEvent,
+  clearPendingCalendarEvent,
+} from '@/lib/calendar';
 import { toast } from 'sonner';
 
 interface UseRecordingStartReturn {
@@ -48,6 +54,21 @@ export function useRecordingStart(
     const seconds = String(now.getSeconds()).padStart(2, '0');
     return `Meeting ${day}_${month}_${year}_${hours}_${minutes}_${seconds}`;
   }, []);
+
+  // Resolve the meeting title from the calendar when an event overlaps "now"
+  // (name = "YYYY-MM-DD <Subject>" and the event is stashed for the stop handler
+  // to persist). Falls back to the timestamp-based title otherwise.
+  const resolveMeetingTitle = useCallback(async (): Promise<string> => {
+    const events = await lookupCalendarEvents(new Date());
+    if (events.length > 0) {
+      // Use the top-ranked (most specific) candidate for the auto-name; the user
+      // can re-match to a different candidate later from the meeting header.
+      stashPendingCalendarEvent(events[0]);
+      return calendarTitle(events[0]);
+    }
+    clearPendingCalendarEvent();
+    return generateMeetingTitle();
+  }, [generateMeetingTitle]);
 
   // Check if Parakeet transcription model is ready
   const checkParakeetReady = useCallback(async (): Promise<boolean> => {
@@ -108,7 +129,7 @@ export function useRecordingStart(
 
       console.log('Parakeet ready - setting up meeting title and state');
 
-      const randomTitle = generateMeetingTitle();
+      const randomTitle = await resolveMeetingTitle();
       setMeetingTitle(randomTitle);
 
       // Set STARTING status before initiating backend recording
@@ -141,7 +162,7 @@ export function useRecordingStart(
       // Re-throw so RecordingControls can handle device-specific errors
       throw error;
     }
-  }, [generateMeetingTitle, setMeetingTitle, setIsRecording, clearTranscripts, setIsMeetingActive, checkParakeetReady, checkIfModelDownloading, selectedDevices, showModal, setStatus]);
+  }, [generateMeetingTitle, resolveMeetingTitle, setMeetingTitle, setIsRecording, clearTranscripts, setIsMeetingActive, checkParakeetReady, checkIfModelDownloading, selectedDevices, showModal, setStatus]);
 
   // Check for autoStartRecording flag and start recording automatically
   useEffect(() => {
@@ -179,7 +200,7 @@ export function useRecordingStart(
           // Start the actual backend recording
           try {
             // Generate meeting title
-            const generatedMeetingTitle = generateMeetingTitle();
+            const generatedMeetingTitle = await resolveMeetingTitle();
 
             // Set STARTING status before initiating backend recording
             setStatus(RecordingStatus.STARTING, 'Initializing recording...');
@@ -220,6 +241,7 @@ export function useRecordingStart(
     isAutoStarting,
     selectedDevices,
     generateMeetingTitle,
+    resolveMeetingTitle,
     setMeetingTitle,
     setIsRecording,
     clearTranscripts,
@@ -309,6 +331,7 @@ export function useRecordingStart(
     isAutoStarting,
     selectedDevices,
     generateMeetingTitle,
+    resolveMeetingTitle,
     setMeetingTitle,
     setIsRecording,
     clearTranscripts,

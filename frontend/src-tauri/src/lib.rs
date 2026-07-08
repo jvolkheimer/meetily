@@ -38,6 +38,7 @@ pub(crate) use perf_trace;
 pub mod analytics;
 pub mod api;
 pub mod audio;
+pub mod calendar;
 pub mod config;
 pub mod console_utils;
 pub mod database;
@@ -678,6 +679,11 @@ pub fn run() {
             summary::template_commands::api_validate_template,
             // Auto Record meeting detection
             meeting_detection::is_meeting_microphone_active,
+            // Read-only calendar integration
+            calendar::get_calendar_events_for_time,
+            calendar::save_meeting_calendar,
+            calendar::get_meeting_calendar,
+            calendar::clear_meeting_calendar,
             // Summary prompt commands
             summary::summary_prompt_commands::api_list_summary_prompts,
             summary::summary_prompt_commands::api_save_summary_prompt,

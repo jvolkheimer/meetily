@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import Analytics from '@/lib/analytics';
 import { isOllamaNotInstalledError } from '@/lib/utils';
 import { BuiltInModelInfo } from '@/lib/builtin-ai';
+import { getMeetingCalendar, formatCalendarContext } from '@/lib/calendar';
 import {
   detectAndCacheSummaryLanguage,
   readMeetingSummaryLanguage,
@@ -146,6 +147,21 @@ export function useSummaryGeneration({
         transcriptTexts?.length ? transcriptTexts : [transcriptText]
       );
 
+      // Prepend matched calendar details (subject/date/time/participants) to the
+      // user context so the model uses real meeting metadata instead of guessing.
+      let effectivePrompt = customPrompt;
+      try {
+        const calendarEvent = await getMeetingCalendar(meeting.id);
+        if (calendarEvent) {
+          const calendarContext = formatCalendarContext(calendarEvent);
+          effectivePrompt = customPrompt.trim()
+            ? `${calendarContext}\n\n${customPrompt}`
+            : calendarContext;
+        }
+      } catch (error) {
+        console.warn('Failed to load calendar context for summary (non-fatal):', error);
+      }
+
       // Process transcript and get process_id
       const result = await invokeTauri('api_process_transcript', {
         text: transcriptText,
@@ -154,7 +170,7 @@ export function useSummaryGeneration({
         meetingId: meeting.id,
         chunkSize: 40000,
         overlap: 1000,
-        customPrompt: customPrompt,
+        customPrompt: effectivePrompt,
         // Templates are superseded by user-defined summary prompts; a valid template id is still
         // sent as a harmless structural fallback for when no prompt is available.
         templateId: 'standard_meeting',

@@ -7,6 +7,7 @@ import { EmptyStateSummary } from '@/components/EmptyStateSummary';
 import { ModelConfig } from '@/components/ModelSettingsModal';
 import { SummaryGeneratorButtonGroup } from './SummaryGeneratorButtonGroup';
 import { SummaryUpdaterButtonGroup } from './SummaryUpdaterButtonGroup';
+import { CalendarHeader } from './CalendarHeader';
 import Analytics from '@/lib/analytics';
 import { useEffect, useRef, useState, RefObject } from 'react';
 import { toast } from 'sonner';
@@ -254,6 +255,11 @@ export function SummaryPanel({
 
   return (
     <div className="flex-1 min-w-0 flex flex-col bg-white overflow-hidden">
+      {/* Calendar metadata for this meeting, directly above the summary */}
+      {meeting.id && meeting.id !== 'intro-call' && (
+        <CalendarHeader meetingId={meeting.id} meetingTime={meeting.created_at} />
+      )}
+
       {/* Title area */}
       <div className="p-4 border-b border-gray-200">
         {/* <EditableTitle

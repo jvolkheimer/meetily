@@ -7,6 +7,7 @@ import { useSidebar } from '@/components/Sidebar/SidebarProvider';
 import { useRecordingState, RecordingStatus } from '@/contexts/RecordingStateContext';
 import { storageService } from '@/services/storageService';
 import { transcriptService } from '@/services/transcriptService';
+import { takePendingCalendarEvent, saveMeetingCalendar } from '@/lib/calendar';
 import Analytics from '@/lib/analytics';
 import {
   applyPinnedSummaryLanguageToMeeting,
@@ -292,6 +293,17 @@ export function useRecordingStop(
           console.log('✅ Successfully saved COMPLETE meeting with ID:', meetingId);
           console.log('   Transcripts:', freshTranscripts.length);
           console.log('   folder_path:', folderPath);
+
+          // Persist calendar metadata captured at recording start (best-effort).
+          const pendingCalendarEvent = takePendingCalendarEvent();
+          if (pendingCalendarEvent) {
+            try {
+              await saveMeetingCalendar(meetingId, pendingCalendarEvent);
+              console.log('📅 Saved calendar metadata for meeting:', meetingId);
+            } catch (error) {
+              console.warn('Failed to save calendar metadata (non-fatal):', error);
+            }
+          }
 
           // Mark meeting as saved in IndexedDB (for recovery system)
           await markMeetingAsSaved();
